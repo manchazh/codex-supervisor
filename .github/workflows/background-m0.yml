@@ -1,0 +1,33 @@
+name: Фоновый Supervisor M0 — проверки без модели
+
+on:
+  pull_request:
+    paths:
+      - 'background_supervisor/**'
+      - 'tests/test_background_m0.py'
+      - '.github/workflows/background-m0.yml'
+  push:
+    branches:
+      - issue/10-background-m0
+
+permissions:
+  contents: read
+
+jobs:
+  mock:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Проверка синтаксиса
+        run: python -m compileall -q background_supervisor tests/test_background_m0.py
+      - name: Unit-тесты без Codex и сети
+        run: python -m unittest discover -s tests -p "test_background_m0.py" -v
+      - name: Offline-демо квоты без ожидания
+        run: python -m background_supervisor demo --ticks 8 --interval 0
