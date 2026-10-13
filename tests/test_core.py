@@ -9,6 +9,7 @@ from unittest.mock import patch
 from supervisor.core import ActionError, Supervisor
 from supervisor.mock import MockBackend
 from supervisor.storage import AlreadyRunning, InstanceLock, StateError, StateStore
+from supervisor.shortcuts import is_paste_shortcut
 
 
 class CoreTests(unittest.TestCase):
@@ -158,6 +159,17 @@ class CoreTests(unittest.TestCase):
         backend = MockBackend()
         self.assertEqual(backend.reply("test"), backend.reply("test"))
         self.assertIn("Настоящий Codex не запускался", backend.reply("test"))
+
+class ShortcutsTests(unittest.TestCase):
+    def test_windows_physical_ctrl_v_regardless_of_layout(self):
+        self.assertTrue(is_paste_shortcut(0x56, "v", platform="nt"))
+        self.assertTrue(is_paste_shortcut(0x56, "Cyrillic_em", platform="nt"))
+        self.assertFalse(is_paste_shortcut(0x43, "Cyrillic_es", platform="nt"))
+
+    def test_non_windows_fallback_keysym(self):
+        self.assertTrue(is_paste_shortcut(55, "v", platform="posix"))
+        self.assertFalse(is_paste_shortcut(55, "c", platform="posix"))
+
 
 
 class StorageTests(unittest.TestCase):
