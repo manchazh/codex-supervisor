@@ -6,6 +6,7 @@ M0: не запускает модель, TUI, app-server, сеть или пр�
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 
 from .doctor import inspect_cli
@@ -65,6 +66,11 @@ def _demo(ticks: int, interval: float):
 
 
 def main():
+    # Windows CI и перенаправленные потоки могут использовать cp1252.
+    # Меняем только кодировку вывода ЭТОГО процесса, не Windows/PowerShell.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(
         description="Фоновый Supervisor M0: только read-only doctor и имитация."
     )
