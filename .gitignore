@@ -1,0 +1,30 @@
+# Локальное окружение и данные пользователя
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.coverage
+coverage/
+dist/
+build/
+*.egg-info/
+node_modules/
+.tools/
+tmp/
+temp/
+.local/
+data/
+state/
+*.sqlite
+*.sqlite3
+
+# Не коммитить внутренние артефакты Codex
+.codex/
