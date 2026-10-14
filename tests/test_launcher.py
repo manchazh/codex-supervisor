@@ -1,6 +1,7 @@
 """Офлайн-проверки запускалки: настоящий Codex никогда не вызывается."""
 
 from pathlib import Path
+import json
 import os
 import subprocess
 import sys
@@ -119,31 +120,67 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertIn(b"FAKE_CODEX_OK", result.stdout)
 
-    @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
-    def test_windows_entry_opens_powershell_and_runs_fake_cli(self):
+    def windows_entry(self, arguments=(), fake_cli=True):
         root = Path(__file__).resolve().parents[1]
         output = build(root, Path(self.temp.name) / "entry.zip")
         with zipfile.ZipFile(output) as archive:
             archive.extractall(Path(self.temp.name) / "распаковка с пробелами")
         fake_bin = Path(self.temp.name) / "fake-entry-bin"
         fake_bin.mkdir()
-        (fake_bin / "codex.cmd").write_text(
-            "@echo off\nif not exist project-marker.txt exit /b 8\n"
-            "echo FAKE_POWERSHELL_CLI_OK\nexit /b 0\n", encoding="ascii"
-        )
-        # Исключить настоящий Codex; оставить только Python и встроенную ОС.
+        if fake_cli:
+            (fake_bin / "codex.cmd").write_text(
+                "@echo off\nif not exist project-marker.txt exit /b 8\n"
+                "if not \"%2\"==\"\" exit /b 9\n"
+                "if not \"%1\"==\"\" if not \"%1\"==\"resume\" exit /b 10\n"
+                "echo new> launcher-result.txt\n"
+                "if \"%1\"==\"resume\" echo resume> launcher-result.txt\n"
+                "exit /b 0\n", encoding="ascii"
+            )
+        # Без Python и настоящего Codex в PATH. Копируем только CMD в проект.
         env = dict(os.environ, PATH=os.pathsep.join([
-            str(fake_bin), str(Path(sys.executable).parent),
+            str(fake_bin),
             str(Path(os.environ["SystemRoot"]) / "System32"),
         ]))
-        entry = Path(self.temp.name) / "распаковка с пробелами/codex-launcher/start.cmd"
+        report = Path(self.temp.name) / "shell-report.json"
+        env["LAUNCHER_TEST_REPORT"] = str(report)
+        source = (Path(self.temp.name) / "распаковка с пробелами/codex-launcher/start.cmd").read_text(encoding="utf-8")
+        # Для автоматического теста дождаться нового окна и закрыть его после
+        # команды. Основной PowerShell-код сохраняется, добавляется диагностика.
+        source = source.replace('start "Codex | Windows PowerShell"', 'start /wait "Codex | Windows PowerShell"')
+        source = source.replace("-NoExit", "-NoProfile")
+        location = "Set-Location -LiteralPath $launcherProject -ErrorAction Stop;"
+        source = source.replace(location, location + " [pscustomobject]@{ shell = (Get-Process -Id $PID).Path; title = $Host.UI.RawUI.WindowTitle; cwd = (Get-Location).Path; background = [string]$Host.UI.RawUI.BackgroundColor } | ConvertTo-Json | Set-Content -LiteralPath $env:LAUNCHER_TEST_REPORT -Encoding UTF8;")
+        entry = self.project / "start.cmd"
+        entry.write_text(source, encoding="utf-8")
         result = subprocess.run(
-            [str(entry), str(self.project)], input=b"exit\r\n",
+            [str(entry), *arguments], cwd=self.temp.name,
             env=env, capture_output=True, timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(b"FAKE_POWERSHELL_CLI_OK", result.stdout)
-        self.assertIn(b"PS ", result.stdout)
+        self.assertTrue(report.exists(), result.stderr)
+        return json.loads(report.read_text(encoding="utf-8-sig"))
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
+    def test_windows_double_click_uses_own_folder_and_separate_powershell(self):
+        report = self.windows_entry()
+        self.assertEqual(Path(report["cwd"]), self.project.resolve())
+        self.assertTrue(report["shell"].lower().endswith("\\powershell.exe"))
+        self.assertEqual(report["title"], "Codex | Windows PowerShell")
+        self.assertEqual(report["background"], "DarkBlue")
+        self.assertEqual((self.project / "launcher-result.txt").read_text().strip(), "new")
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
+    def test_windows_resume_uses_own_folder_without_python(self):
+        report = self.windows_entry(["--resume"])
+        self.assertEqual(Path(report["cwd"]), self.project.resolve())
+        self.assertEqual((self.project / "launcher-result.txt").read_text().strip(), "resume")
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
+    def test_windows_missing_cli_does_not_launch_or_change_project(self):
+        report = self.windows_entry(fake_cli=False)
+        self.assertEqual(Path(report["cwd"]), self.project.resolve())
+        self.assertFalse((self.project / "launcher-result.txt").exists())
+        self.assertEqual((self.project / "project-marker.txt").read_text(), "fixture")
 
 
 if __name__ == "__main__":
