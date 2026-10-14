@@ -67,7 +67,7 @@ class IntegrationTests(unittest.TestCase):
         rc, calls = self.managed()
         self.assertEqual(rc, 0)
         self.assertEqual(calls, [
-            (["codex-test.exe", "--remote", "unix://", "--no-alt-screen"],
+            (["codex-test.exe", "--remote", "unix://", "--cd", str(self.project.resolve()), "--no-alt-screen"],
              str(self.project.resolve()), False),
         ])
         self.assertTrue(FakeWatcher.finished.is_set())
@@ -79,7 +79,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(rc, 9)
         self.assertEqual(calls[0][0], [
             "codex-test.exe", "resume", "--last", "--remote", "unix://",
-            "--no-alt-screen",
+            "--cd", str(self.project.resolve()), "--no-alt-screen",
         ])
         self.assertTrue(FakeWatcher.finished.is_set())
 
@@ -117,8 +117,8 @@ class IntegrationTests(unittest.TestCase):
     def test_project_path_with_unicode_and_shell_metacharacters(self):
         p = project_directory('"' + str(self.project) + '"')
         self.assertEqual(p, self.project.resolve())
-        self.assertEqual(codex_argv("fake-codex", resume=False), [
-            "fake-codex", "--remote", "unix://", "--no-alt-screen",
+        self.assertEqual(codex_argv("fake-codex", directory=p, resume=False), [
+            "fake-codex", "--remote", "unix://", "--cd", str(p), "--no-alt-screen",
         ])
         with self.assertRaises(LaunchError):
             project_directory(self.project / "missing-folder")
