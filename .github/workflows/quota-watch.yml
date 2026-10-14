@@ -1,0 +1,32 @@
+name: Монитор квот — офлайн-тесты
+
+on:
+  push:
+    branches:
+      - issue/14-quota-watch
+  pull_request:
+    paths:
+      - 'quota_probe/**'
+      - 'tests/test_quota_watch.py'
+      - '.github/workflows/quota-watch.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    name: Проверки без Codex / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Синтаксис
+        run: python -m compileall -q quota_probe tests/test_quota_watch.py
+      - name: Offline тесты RPC и наблюдателя
+        run: python -m unittest discover -s tests -p "test_quota*.py" -v
