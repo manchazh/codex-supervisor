@@ -1,0 +1,31 @@
+name: Проверка read-only RPC клиента без Codex
+
+on:
+  pull_request:
+    paths:
+      - 'quota_probe/**'
+      - 'tests/test_quota_probe.py'
+      - '.github/workflows/quota-probe.yml'
+  push:
+    branches:
+      - issue/12-readonly-quota-rpc
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Проверка синтаксиса
+        run: python -m compileall -q quota_probe tests/test_quota_probe.py
+      - name: Offline mock-тесты RPC (без настоящего Codex)
+        run: python -m unittest discover -s tests -p "test_quota_probe.py" -v
