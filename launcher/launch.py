@@ -37,7 +37,7 @@ def launch(directory, resume=False):
     # пробелы и shell-метасимволы; stdin/stdout/stderr наследуются для TUI.
     command = [executable]
     if resume:
-        command.append("resume")
+        command.extend(["resume", "--last"])
     try:
         return subprocess.call(command, cwd=str(directory), shell=False)
     except OSError as exc:
@@ -49,7 +49,7 @@ def main(argv=None):
         description="Запуск Codex в любом локальном проекте. Настройки Codex не меняются."
     )
     parser.add_argument("project", nargs="?", help="Папка проекта (в кавычках при наличии пробелов)")
-    parser.add_argument("--resume", action="store_true", help="Выбрать сохранённую сессию Codex")
+    parser.add_argument("--resume", action="store_true", help="Продолжить последнюю сессию этой папки")
     args = parser.parse_args(argv)
     try:
         if args.project is None:
@@ -57,7 +57,7 @@ def main(argv=None):
             print("Настройки и авторизация используются с этого ПК.")
             print("Не запускайте два агента для правок одного проекта одновременно.")
             directory = project_directory(input("Папка проекта (можно вставить путь): "))
-            mode = "2" if args.resume else input("1 — новый диалог; 2 — выбрать историю; Enter — отмена: ").strip()
+            mode = "2" if args.resume else input("1 — новый диалог; 2 — последняя сессия проекта; Enter — отмена: ").strip()
             if not mode:
                 print("Запуск отменён.")
                 return 0

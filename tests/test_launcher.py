@@ -40,9 +40,9 @@ class LauncherTests(unittest.TestCase):
 
     @patch("launcher.launch.subprocess.call", return_value=7)
     @patch("launcher.launch.shutil.which", return_value="codex")
-    def test_resume_uses_picker_and_preserves_exit_code(self, which, call):
+    def test_resume_uses_last_in_project_and_preserves_exit_code(self, which, call):
         self.assertEqual(launch(self.project, resume=True), 7)
-        call.assert_called_once_with(["codex", "resume"], cwd=str(self.project), shell=False)
+        call.assert_called_once_with(["codex", "resume", "--last"], cwd=str(self.project), shell=False)
 
     @patch("launcher.launch.subprocess.call")
     @patch("launcher.launch.shutil.which", return_value=None)
@@ -91,7 +91,7 @@ class LauncherTests(unittest.TestCase):
             self.assertIsNone(archive.testzip())
             self.assertEqual(set(archive.namelist()), {"codex-launcher/" + n for n in FILES})
             self.assertNotIn(b"\r", archive.read("codex-launcher/start.sh"))
-            cmd = archive.read("codex-launcher/start.cmd")
+            cmd = archive.read("codex-launcher/start-codex.cmd")
             self.assertIn(b"\r\n", cmd)
             self.assertNotIn(b"\n", cmd.replace(b"\r\n", b""))
             archive.extractall(Path(self.temp.name) / "перенос")
@@ -112,6 +112,7 @@ class LauncherTests(unittest.TestCase):
         (fake_bin / "codex.cmd").write_text(
             "@echo off\nif not exist project-marker.txt exit /b 8\n"
             "if not \"%1\"==\"resume\" exit /b 9\n"
+            "if not \"%2\"==\"--last\" exit /b 10\n"
             "echo FAKE_CODEX_OK\nexit /b 7\n", encoding="ascii"
         )
         env = dict(os.environ, PATH=str(fake_bin))
@@ -123,7 +124,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertIn(b"FAKE_CODEX_OK", result.stdout)
 
-    def windows_entry(self, arguments=(), fake_cli=True):
+    def windows_entry(self, arguments=(), fake_cli=True, choice="1"):
         root = Path(__file__).resolve().parents[1]
         output = build(root, Path(self.temp.name) / "entry.zip")
         with zipfile.ZipFile(output) as archive:
@@ -133,8 +134,10 @@ class LauncherTests(unittest.TestCase):
         if fake_cli:
             (fake_bin / "codex.cmd").write_text(
                 "@echo off\nif not exist project-marker.txt exit /b 8\n"
-                "if not \"%2\"==\"\" exit /b 9\n"
+                "if not \"%3\"==\"\" exit /b 9\n"
                 "if not \"%1\"==\"\" if not \"%1\"==\"resume\" exit /b 10\n"
+                "if \"%1\"==\"resume\" if not \"%2\"==\"--last\" exit /b 11\n"
+                "if \"%1\"==\"\" if not \"%2\"==\"\" exit /b 12\n"
                 "echo new> launcher-result.txt\n"
                 "if \"%1\"==\"resume\" echo resume> launcher-result.txt\n"
                 "exit /b 0\n", encoding="ascii"
@@ -146,14 +149,16 @@ class LauncherTests(unittest.TestCase):
         ]))
         report = Path(self.temp.name) / "shell-report.json"
         env["LAUNCHER_TEST_REPORT"] = str(report)
-        source = (Path(self.temp.name) / "распаковка с пробелами/codex-launcher/start.cmd").read_bytes().decode("utf-8")
+        env["LAUNCHER_TEST_CHOICE"] = choice
+        source = (Path(self.temp.name) / "распаковка с пробелами/codex-launcher/start-codex.cmd").read_bytes().decode("utf-8")
         # Для автоматического теста дождаться нового окна и закрыть его после
         # команды. Основной PowerShell-код сохраняется, добавляется диагностика.
         source = source.replace('start "Codex | Windows PowerShell"', 'start /wait "Codex | Windows PowerShell"')
         source = source.replace("-NoExit", "-NoProfile")
+        source = source.replace("$launcherProject = $env:CODEX_LAUNCHER_PROJECT;", "$launcherInitialBackground = [string]$Host.UI.RawUI.BackgroundColor; function Read-Host { $env:LAUNCHER_TEST_CHOICE }; $launcherProject = $env:CODEX_LAUNCHER_PROJECT;")
         location = "Set-Location -LiteralPath $launcherProject -ErrorAction Stop;"
-        source = source.replace(location, location + " [pscustomobject]@{ shell = (Get-Process -Id $PID).Path; title = $Host.UI.RawUI.WindowTitle; cwd = (Get-Location).Path; background = [string]$Host.UI.RawUI.BackgroundColor } | ConvertTo-Json | Set-Content -LiteralPath $env:LAUNCHER_TEST_REPORT -Encoding UTF8;")
-        entry = self.project / "start.cmd"
+        source = source.replace(location, location + " [pscustomobject]@{ shell = (Get-Process -Id $PID).Path; title = $Host.UI.RawUI.WindowTitle; cwd = (Get-Location).Path; background = [string]$Host.UI.RawUI.BackgroundColor; initialBackground = $launcherInitialBackground } | ConvertTo-Json | Set-Content -LiteralPath $env:LAUNCHER_TEST_REPORT -Encoding UTF8;")
+        entry = self.project / "start-codex.cmd"
         # Сохранять байты из ZIP, включая окончания строк: write_text на Windows
         # незаметно исправлял LF в CRLF и скрывал поломку реальной поставки.
         entry.write_bytes(source.encode("utf-8"))
@@ -171,7 +176,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(Path(report["cwd"]), self.project.resolve())
         self.assertTrue(report["shell"].lower().endswith("\\powershell.exe"))
         self.assertEqual(report["title"], "Codex | Windows PowerShell")
-        self.assertEqual(report["background"], "DarkBlue")
+        self.assertEqual(report["background"], report["initialBackground"])
         self.assertEqual((self.project / "launcher-result.txt").read_text().strip(), "new")
 
     @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
@@ -179,6 +184,27 @@ class LauncherTests(unittest.TestCase):
         report = self.windows_entry(["--resume"])
         self.assertEqual(Path(report["cwd"]), self.project.resolve())
         self.assertEqual((self.project / "launcher-result.txt").read_text().strip(), "resume")
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
+    def test_windows_menu_continues_last_project_session(self):
+        report = self.windows_entry(choice="2")
+        self.assertEqual(Path(report["cwd"]), self.project.resolve())
+        self.assertEqual((self.project / "launcher-result.txt").read_text().strip(), "resume")
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
+    def test_windows_menu_cancel_does_not_start_cli(self):
+        self.windows_entry(choice="0")
+        self.assertFalse((self.project / "launcher-result.txt").exists())
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
+    def test_windows_menu_invalid_choice_does_not_start_cli(self):
+        self.windows_entry(choice="invalid")
+        self.assertFalse((self.project / "launcher-result.txt").exists())
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
+    def test_windows_menu_enter_starts_new_session(self):
+        self.windows_entry(choice="")
+        self.assertEqual((self.project / "launcher-result.txt").read_text().strip(), "new")
 
     @unittest.skipUnless(os.name == "nt", "PowerShell проверяется на Windows")
     def test_windows_missing_cli_does_not_launch_or_change_project(self):

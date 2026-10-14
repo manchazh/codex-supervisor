@@ -4,7 +4,7 @@ from pathlib import Path
 import zipfile
 
 
-FILES = ("launch.py", "start.cmd", "start.sh", "README.md")
+FILES = ("launch.py", "start-codex.cmd", "start.sh", "README.md")
 
 
 def build(root, output):
@@ -17,7 +17,7 @@ def build(root, output):
         for name, contents in sources:
             if name == "start.sh":
                 contents = contents.replace(b"\r\n", b"\n")
-            elif name == "start.cmd":
+            elif name == "start-codex.cmd":
                 contents = contents.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
             archive.writestr("codex-launcher/" + name, contents)
     return output
