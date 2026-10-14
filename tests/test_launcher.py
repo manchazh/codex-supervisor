@@ -91,6 +91,9 @@ class LauncherTests(unittest.TestCase):
             self.assertIsNone(archive.testzip())
             self.assertEqual(set(archive.namelist()), {"codex-launcher/" + n for n in FILES})
             self.assertNotIn(b"\r", archive.read("codex-launcher/start.sh"))
+            cmd = archive.read("codex-launcher/start.cmd")
+            self.assertIn(b"\r\n", cmd)
+            self.assertNotIn(b"\n", cmd.replace(b"\r\n", b""))
             archive.extractall(Path(self.temp.name) / "перенос")
         moved = Path(self.temp.name) / "перенос" / "codex-launcher"
         self.assertTrue((moved / "launch.py").is_file())
@@ -143,7 +146,7 @@ class LauncherTests(unittest.TestCase):
         ]))
         report = Path(self.temp.name) / "shell-report.json"
         env["LAUNCHER_TEST_REPORT"] = str(report)
-        source = (Path(self.temp.name) / "распаковка с пробелами/codex-launcher/start.cmd").read_text(encoding="utf-8")
+        source = (Path(self.temp.name) / "распаковка с пробелами/codex-launcher/start.cmd").read_bytes().decode("utf-8")
         # Для автоматического теста дождаться нового окна и закрыть его после
         # команды. Основной PowerShell-код сохраняется, добавляется диагностика.
         source = source.replace('start "Codex | Windows PowerShell"', 'start /wait "Codex | Windows PowerShell"')
@@ -151,7 +154,9 @@ class LauncherTests(unittest.TestCase):
         location = "Set-Location -LiteralPath $launcherProject -ErrorAction Stop;"
         source = source.replace(location, location + " [pscustomobject]@{ shell = (Get-Process -Id $PID).Path; title = $Host.UI.RawUI.WindowTitle; cwd = (Get-Location).Path; background = [string]$Host.UI.RawUI.BackgroundColor } | ConvertTo-Json | Set-Content -LiteralPath $env:LAUNCHER_TEST_REPORT -Encoding UTF8;")
         entry = self.project / "start.cmd"
-        entry.write_text(source, encoding="utf-8")
+        # Сохранять байты из ZIP, включая окончания строк: write_text на Windows
+        # незаметно исправлял LF в CRLF и скрывал поломку реальной поставки.
+        entry.write_bytes(source.encode("utf-8"))
         result = subprocess.run(
             [str(entry), *arguments], cwd=self.temp.name,
             env=env, capture_output=True, timeout=30,

@@ -1,2 +1,4 @@
 # POSIX-обёртка должна работать и после checkout на Windows.
 launcher/start.sh text eol=lf
+# CMD с LF может неверно разбирать строки и терять переменные запуска.
+launcher/start.cmd text eol=crlf

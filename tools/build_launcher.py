@@ -17,6 +17,8 @@ def build(root, output):
         for name, contents in sources:
             if name == "start.sh":
                 contents = contents.replace(b"\r\n", b"\n")
+            elif name == "start.cmd":
+                contents = contents.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
             archive.writestr("codex-launcher/" + name, contents)
     return output
 
