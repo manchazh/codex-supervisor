@@ -26,6 +26,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Проверить синтаксис
-        run: python -m compileall -q supervisor tests
+        run: python -m compileall -q supervisor launcher tools tests
       - name: Запустить unit-тесты (только mock)
         run: python -m unittest discover -s tests -v

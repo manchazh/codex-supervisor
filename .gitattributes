@@ -1,0 +1,2 @@
+# POSIX-обёртка должна работать и после checkout на Windows.
+launcher/start.sh text eol=lf
