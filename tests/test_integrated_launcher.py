@@ -68,7 +68,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(calls, [
             (["codex-test.exe", "--remote", "unix://", "--no-alt-screen"],
-             str(self.project), False),
+             str(self.project.resolve()), False),
         ])
         self.assertTrue(FakeWatcher.finished.is_set())
         log = (self.state / "managed-watch.log").read_text(encoding="utf-8")
