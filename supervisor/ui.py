@@ -148,6 +148,9 @@ class App:
         )
         self.input.grid(row=0, column=0, sticky="ew")
         self.input.bind("<Control-Return>", self.send_shortcut)
+        # Перехватываем физический Ctrl+V: на Windows русская раскладка
+        # может выдавать Cyrillic_em вместо латинского keysym "v".
+        self.input.bind("<Control-KeyPress>", self.control_keypress)
         self.btn_send = ttk.Button(
             compose, text="Отправить", style="Accent.TButton",
             command=self.send
@@ -280,6 +283,20 @@ class App:
     def simulate_limit(self):
         self._run(self.controller.simulate_wait)
         self._render()
+
+    def control_keypress(self, event):
+        from .shortcuts import is_paste_shortcut
+        if not is_paste_shortcut(event.keycode, event.keysym):
+            return None
+        try:
+            clipboard = self.root.clipboard_get()
+        except tk.TclError:
+            return "break"
+        if self.input.tag_ranges("sel"):
+            self.input.delete("sel.first", "sel.last")
+        self.input.insert("insert", clipboard)
+        self.input.see("insert")
+        return "break"
 
     def send_shortcut(self, event):
         self.send()
