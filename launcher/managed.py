@@ -35,14 +35,18 @@ def project_directory(value):
     return directory
 
 
-def codex_argv(executable, *, resume=False):
-    """Явная связь с общим app-server; тот же endpoint, что читает watcher."""
+def codex_argv(executable, *, directory, resume=False):
+    """Явный проект для remote TUI: cwd дочернего процесса недостаточен.
+
+    В remote-режиме Codex может брать cwd app-server daemon. Начиная с
+    Codex CLI 0.118+, --cd перенаправляется серверу как cwd сессии.
+    """
     if not executable:
         raise LaunchError("Codex CLI не найден. Установите CLI отдельно.")
     command = [str(executable)]
     if resume:
         command += ["resume", "--last"]
-    command += ["--remote", "unix://", "--no-alt-screen"]
+    command += ["--remote", "unix://", "--cd", str(directory), "--no-alt-screen"]
     return command
 
 
@@ -66,7 +70,7 @@ def run_managed(directory, *, resume=False, interval=300.0,
     """
     directory = project_directory(directory)
     executable = codex_path if codex_path is not None else shutil.which("codex")
-    command = codex_argv(executable, resume=resume)
+    command = codex_argv(executable, directory=directory, resume=resume)
     home = Path(state_dir) if state_dir is not None else local_directory()
 
     try:
