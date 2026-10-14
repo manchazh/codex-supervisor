@@ -44,7 +44,7 @@ def main(argv=None):
                 raise LaunchError("Выбери 1, 2 или 0.")
             resume = choice == "2"
         if args.dry_run:
-            command = codex_argv("codex", resume=resume)
+            command = codex_argv("codex", directory=directory, resume=resume)
             print("Проверка без запуска Codex, модели и фонового монитора.")
             print(f"Проект: {directory}")
             print(f"Режим: {'последняя сессия проекта' if resume else 'новая сессия'}")
