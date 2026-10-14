@@ -82,10 +82,9 @@ def run_managed(directory, *, resume=False, interval=300.0,
                 interval=interval,
                 store=WatchState(home),
                 write=_log_writer(logfile),
-                sleeper=stop.wait,
             )
             thread = threading.Thread(
-                target=watcher.run, daemon=True,
+                target=lambda: watcher.run(stop_event=stop), daemon=True,
                 name="codex-supervisor-managed-quota-watch",
             )
             thread.start()
