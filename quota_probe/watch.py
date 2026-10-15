@@ -227,7 +227,7 @@ class QuotaWatcher:
             self.write(f"Проверка лимитов не удалась: {exc}")
             return min(900.0, max(60.0, self.interval) * 2 ** min(self.failures - 1, 4))
 
-    def run(self, *, max_checks=None):
+    def run(self, *, max_checks=None, stop_event=None):
         if max_checks is not None and max_checks < 1:
             raise ValueError("max_checks должен быть >= 1")
         count = 0
@@ -235,9 +235,13 @@ class QuotaWatcher:
             "Фоновый Supervisor: только чтение квот. "
             "Ctrl+C — остановить. Автопродолжение НЕ РЕАЛИЗОВАНО."
         )
-        while True:
+        while stop_event is None or not stop_event.is_set():
             delay = self.check()
             count += 1
             if max_checks is not None and count >= max_checks:
                 return
-            self.sleeper(delay)
+            if stop_event is not None:
+                if stop_event.wait(delay):
+                    return
+            else:
+                self.sleeper(delay)

@@ -1,0 +1,41 @@
+name: M2 объединённый Launcher — тесты без модели
+
+on:
+  push:
+    branches:
+      - issue/16-integrated-launcher
+  pull_request:
+    paths:
+      - "launcher/**"
+      - "quota_probe/**"
+      - "start-codex-supervisor.cmd"
+      - "tests/test_integrated_launcher.py"
+      - ".github/workflows/integrated-launcher.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: python -m compileall -q launcher quota_probe tests
+      - name: Unit tests (no real Codex / models)
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Windows CMD must have CRLF bytes
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $b = [System.IO.File]::ReadAllBytes("start-codex-supervisor.cmd")
+          $s = [System.Text.Encoding]::UTF8.GetString($b)
+          if (-not $s.Contains("`r`n")) { throw "Windows CMD needs CRLF" }
+          if ($s.Replace("`r`n","").Contains("`n")) { throw "Found bare LF" }
